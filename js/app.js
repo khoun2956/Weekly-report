@@ -64,19 +64,23 @@ try {
     sourceTimes[k] = localStorage.getItem("weeklyPartsUpdatedAt_" + k) || "";
   }
 } catch {}
+
 for (const [k, id] of [
   ["in", "statusIn"],
   ["fix", "statusFix"],
   ["summary", "statusSummary"],
   ["service", "statusService"],
-])
-  if (sourceFiles[k])
-    document.getElementById(id).textContent =
+]) {
+  const el = document.getElementById(id);
+  if (el && sourceFiles[k])
+    el.textContent =
       "ໃຊ້ Excel · " +
       sourceFiles[k] +
       (sourceTimes[k]
         ? " · " + new Date(sourceTimes[k]).toLocaleString("en-GB")
         : "");
+}
+
 for (const [id, key] of [
   ["rwLaoColor", "weeklyReportRwLaoColor"],
   ["partInFixColor", "weeklyReportPartInFixColor"],
@@ -86,29 +90,94 @@ for (const [id, key] of [
   if (picker && savedColor && /^#[0-9a-f]{6}$/i.test(savedColor))
     picker.value = savedColor;
 }
+
 const reportFoot = document.getElementById("reportFoot");
 if (reportFoot)
   reportFoot.textContent =
     "ແຕ່ລະສ່ວນອັບເດດຈາກໄຟລ໌ Excel ແຍກກັນ ແລະບັນທຶກໄວ້ໃນ browser ນີ້";
-const getClass = (n) => {
-  let v = classes[n];
-  return v === "Electronic" || v === "Wear/Tear" ? v : "";
+
+// Part classification logic based on user rules:
+// - MIC PART ID CODE start with '010' - '070' -> 'ELECTRONIC'
+// - MIC PART ID CODE >= '080' -> 'Wear/Tear'
+// - MIC PART ID CODE start with 'HCS' -> 'HCS'
+function classifyPartCode(code, name = "") {
+  const c = String(code || "").trim().toUpperCase();
+  if (c.startsWith("HCS")) {
+    return "HCS";
+  }
+  const m = c.match(/^(\d{3})/);
+  if (m) {
+    const num = parseInt(m[1], 10);
+    if (num >= 10 && num <= 70) {
+      return "ELECTRONIC";
+    } else if (num >= 80) {
+      return "Wear/Tear";
+    }
+  }
+  const n = String(name || "").toLowerCase();
+  if (
+    n.includes("roller") ||
+    n.includes("gear") ||
+    n.includes("belt") ||
+    n.includes("guide") ||
+    n.includes("filter") ||
+    n.includes("wear")
+  ) {
+    return "Wear/Tear";
+  }
+  return "ELECTRONIC";
+}
+
+const getClass = (code, name = "") => {
+  if (classes[code]) return classes[code];
+  if (classes[name]) return classes[name];
+  return classifyPartCode(code, name);
 };
-const setClass = (n, v) => {
-  if (v) classes[n] = v;
-  else delete classes[n];
+
+const setClass = (key, v) => {
+  if (v) classes[key] = v;
+  else delete classes[key];
   localStorage.setItem(KEY, JSON.stringify(classes));
   render();
 };
-const dateOnly = (s) => s.slice(0, 10);
-const fmtDate = (s) =>
-  new Date(s).toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
+
+const dateOnly = (s) => String(s || "").slice(0, 10);
+
+// Format date to dd-mmm-yy (e.g. 09-Oct-26, 06-Nov-26)
+const fmtDate = (s) => {
+  if (!s) return "";
+  const d = new Date(s);
+  if (isNaN(d.getTime())) return String(s);
+  const day = String(d.getDate()).padStart(2, "0");
+  const months = [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+  ];
+  const month = months[d.getMonth()];
+  const year = String(d.getFullYear()).slice(-2);
+  return `${day}-${month}-${year}`;
+};
+
+// Start monday ISO
 const startMon = (s) => {
-  let [y, m, day] = s.split("-").map(Number),
-    d = new Date(Date.UTC(y, m - 1, day));
+  if (!s) return "";
+  let [y, m, day] = s.split("-").map(Number);
+  if (!y || !m || !day) return "";
+  let d = new Date(Date.UTC(y, m - 1, day));
   d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
   return d.toISOString().slice(0, 10);
 };
+
 const wlabel = (k) => {
   let [y, m, day] = k.split("-").map(Number),
     a = new Date(Date.UTC(y, m - 1, day)),
@@ -116,8 +185,10 @@ const wlabel = (k) => {
   b.setUTCDate(b.getUTCDate() + 5);
   return `${a.toLocaleDateString("en-GB", { timeZone: "UTC", day: "2-digit", month: "short" })} – ${b.toLocaleDateString("en-GB", { timeZone: "UTC", day: "2-digit", month: "short", year: "numeric" })}`;
 };
+
 let weeks = [];
 const sel = document.getElementById("week");
+
 function refreshWeeks(preferred) {
   weeks = [
     ...new Set(
@@ -128,7 +199,9 @@ function refreshWeeks(preferred) {
           REWORK_SERVICE.map((x) => x.week),
         ),
     ),
-  ].sort();
+  ]
+    .filter(Boolean)
+    .sort();
   sel.innerHTML = "";
   weeks.forEach((k) => {
     let o = document.createElement("option");
@@ -142,36 +215,7 @@ function refreshWeeks(preferred) {
       : weeks[weeks.length - 1] || "";
 }
 refreshWeeks();
-function titleWeek(k) {
-  let [y, m, d] = k.split("-").map(Number),
-    a = new Date(Date.UTC(y, m - 1, d)),
-    b = new Date(a);
-  b.setUTCDate(b.getUTCDate() + 5);
-  let pad = (n) => String(n).padStart(2, "0"),
-    same =
-      a.getUTCMonth() === b.getUTCMonth() &&
-      a.getUTCFullYear() === b.getUTCFullYear();
-  return (
-    "Lao rework " +
-    (same
-      ? pad(a.getUTCDate()) +
-        "-" +
-        pad(b.getUTCDate()) +
-        "." +
-        pad(b.getUTCMonth() + 1) +
-        "." +
-        b.getUTCFullYear()
-      : pad(a.getUTCDate()) +
-        "." +
-        pad(a.getUTCMonth() + 1) +
-        "-" +
-        pad(b.getUTCDate()) +
-        "." +
-        pad(b.getUTCMonth() + 1) +
-        "." +
-        b.getUTCFullYear())
-  );
-}
+
 function esc(s) {
   return String(s ?? "").replace(
     /[&<>"']/g,
@@ -181,13 +225,32 @@ function esc(s) {
       ],
   );
 }
+
+// Compare part codes Min to Max (ascending)
+function comparePartCode(a, b) {
+  const codeA = String(a.code || a.micPartCode || "").trim();
+  const codeB = String(b.code || b.micPartCode || "").trim();
+  if (!codeA && !codeB) return (a.name || "").localeCompare(b.name || "");
+  if (!codeA) return 1;
+  if (!codeB) return -1;
+  return codeA.localeCompare(codeB, undefined, {
+    numeric: true,
+    sensitivity: "base",
+  });
+}
+
 function current() {
   let k = sel.value;
   return {
-    in: DATA.in.filter((x) => startMon(dateOnly(x.date)) === k),
-    fix: DATA.fix.filter((x) => startMon(dateOnly(x.date)) === k),
+    in: DATA.in
+      .filter((x) => startMon(dateOnly(x.date)) === k)
+      .sort(comparePartCode),
+    fix: DATA.fix
+      .filter((x) => startMon(dateOnly(x.date)) === k)
+      .sort(comparePartCode),
   };
 }
+
 function mergeDateRows(existing, incoming) {
   let touched = new Set(
     incoming.map((x) => startMon(dateOnly(x.date))).filter(Boolean),
@@ -198,6 +261,7 @@ function mergeDateRows(existing, incoming) {
     ...incoming,
   ];
 }
+
 function mergeWeekBlocks(existing, incoming) {
   let touched = new Set(incoming.map((x) => x.week).filter(Boolean));
   if (!touched.size) return incoming;
@@ -205,9 +269,17 @@ function mergeWeekBlocks(existing, incoming) {
     (a, b) => a.week.localeCompare(b.week),
   );
 }
-function clsSelect(n) {
-  return `<select class="tagselect" data-name="${esc(n)}" onchange="setClass(this.dataset.name,this.value)"><option value="" ${!getClass(n) ? "selected" : ""}>ບໍ່ຈັດປະເພດ</option><option ${getClass(n) === "Electronic" ? "selected" : ""}>Electronic</option><option ${getClass(n) === "Wear/Tear" ? "selected" : ""}>Wear/Tear</option></select>`;
+
+function clsSelect(code, name) {
+  const currentClass = getClass(code, name);
+  const key = code || name;
+  return `<select class="tagselect" data-key="${esc(key)}" onchange="setClass(this.dataset.key, this.value)">
+    <option value="ELECTRONIC" ${currentClass === "ELECTRONIC" ? "selected" : ""}>ELECTRONIC</option>
+    <option value="Wear/Tear" ${currentClass === "Wear/Tear" ? "selected" : ""}>Wear/Tear</option>
+    <option value="HCS" ${currentClass === "HCS" ? "selected" : ""}>HCS</option>
+  </select>`;
 }
+
 function barRows(obj, color = "") {
   let vals = Object.entries(obj).sort((a, b) => b[1] - a[1]);
   let max = Math.max(1, ...vals.map((x) => x[1]));
@@ -220,46 +292,32 @@ function barRows(obj, color = "") {
         .join("")
     : '<div class="empty">ບໍ່ມີລາຍການໃນອາທິດນີ້</div>';
 }
+
 function kpi(label, value, hint) {
   return `<div class="card"><div class="label">${label}</div><div class="value">${value}</div><div class="hint">${hint}</div></div>`;
 }
+
 function typeSummary(stats, grandTotal) {
-  let groups = grandTotal
-    ? [
-        [
-          "Electronic",
-          "electronic",
-          stats.Electronic,
-          "21 ຊື່ອາໄຫຼ່ · Card Reader 11",
-        ],
-        ["Wear/Tear", "wear", stats["Wear/Tear"], "ຍອດລວມທີ່ສະຫຼຸບໃຫ້"],
-        [
-          "Total Electronic + Wear/Tear",
-          "pending",
-          { qty: grandTotal },
-          "48 + 61",
-        ],
-      ]
-    : [
-        [
-          "Electronic",
-          "electronic",
-          stats.Electronic,
-          stats.Electronic.parts.size + " ຊື່ອາໄຫຼ່",
-        ],
-        [
-          "Wear/Tear",
-          "wear",
-          stats["Wear/Tear"],
-          stats["Wear/Tear"].parts.size + " ຊື່ອາໄຫຼ່",
-        ],
-        [
-          "ຍັງບໍ່ຈັດປະເພດ",
-          "pending",
-          stats["ຍັງບໍ່ຈັດປະເພດ"],
-          stats["ຍັງບໍ່ຈັດປະເພດ"].parts.size + " ຊື່ອາໄຫຼ່",
-        ],
-      ];
+  let groups = [
+    [
+      "ELECTRONIC",
+      "electronic",
+      stats.ELECTRONIC,
+      (stats.ELECTRONIC?.parts?.size || 0) + " ຊື່ອາໄຫຼ່",
+    ],
+    [
+      "Wear/Tear",
+      "wear",
+      stats["Wear/Tear"],
+      (stats["Wear/Tear"]?.parts?.size || 0) + " ຊື່ອາໄຫຼ່",
+    ],
+    [
+      "HCS",
+      "pending",
+      stats.HCS,
+      (stats.HCS?.parts?.size || 0) + " ຊື່ອາໄຫຼ່",
+    ],
+  ];
   return (
     '<div class="type-summary">' +
     groups
@@ -270,7 +328,7 @@ function typeSummary(stats, grandTotal) {
           '"><strong>' +
           n +
           "</strong><b>" +
-          v.qty +
+          (v?.qty || 0) +
           " ຊິ້ນ</b><span>" +
           note +
           "</span></div>",
@@ -279,6 +337,7 @@ function typeSummary(stats, grandTotal) {
     "</div>"
   );
 }
+
 function fixTypeSummary(stats, manual) {
   if (manual) {
     let groups = [
@@ -308,6 +367,7 @@ function fixTypeSummary(stats, manual) {
   }
   return typeSummary(stats);
 }
+
 function normalizeZipPath(base, target) {
   let parts = target.startsWith("/") ? [] : base.split("/").slice(0, -1);
   for (const p of target.replace(/^\//, "").split("/")) {
@@ -317,6 +377,7 @@ function normalizeZipPath(base, target) {
   }
   return parts.join("/");
 }
+
 function summaryValue(v, label) {
   if (v === null || v === undefined || v === "") return "";
   if (typeof v === "number") {
@@ -337,6 +398,7 @@ function summaryValue(v, label) {
   }
   return String(v).trim();
 }
+
 async function readXlsx(file) {
   const buffer = await file.arrayBuffer(),
     view = new DataView(buffer),
@@ -472,7 +534,7 @@ async function readXlsx(file) {
   function category(v, name) {
     let s = String(v ?? "").toLowerCase();
     if (s.includes("wear") || s.includes("tear")) classes[name] = "Wear/Tear";
-    else if (s.includes("elect")) classes[name] = "Electronic";
+    else if (s.includes("elect")) classes[name] = "ELECTRONIC";
   }
   function person(v) {
     return (
@@ -535,7 +597,8 @@ async function readXlsx(file) {
             row,
             (x) =>
               x.includes("micpartcode") ||
-              x === "partcode" ||
+              x.includes("partcode") ||
+              x.includes("micpart") ||
               x === "partno" ||
               x === "partnumber",
           ),
@@ -549,12 +612,17 @@ async function readXlsx(file) {
               x === "unit",
           ),
           bank: getIndex(row, (x) => x.includes("bank")),
+          store: getIndex(row, (x) => x.includes("store") || x.includes("storename")),
+          fromStore: getIndex(row, (x) => x.includes("fromstore")),
+          toStore: getIndex(row, (x) => x.includes("tostore")),
           status: getIndex(row, (x) => x === "status"),
-          to: getIndex(row, (x) => x === "tostore"),
+          purpose: getIndex(row, (x) => x.includes("purpose")),
+          ticket: getIndex(row, (x) => x.includes("ticket")),
           person: getIndex(
             row,
             (x) =>
               x.includes("partfixthisweek") ||
+              x.includes("sender") ||
               x === "fixby" ||
               x === "repairedby" ||
               x === "technician",
@@ -585,13 +653,14 @@ async function readXlsx(file) {
         )
           continue;
         let to =
-          map.to >= 0
-            ? String(row[map.to] ?? "")
+          map.toStore >= 0
+            ? String(row[map.toStore] ?? "")
                 .trim()
                 .toLowerCase()
             : "";
         if (to && !to.includes("usable")) continue;
       }
+      let codeVal = map.code >= 0 ? String(row[map.code] ?? "").trim() : "";
       let cat = map.category >= 0 ? row[map.category] : "";
       if (cat) category(cat, part);
       if (isIn) {
@@ -601,17 +670,45 @@ async function readXlsx(file) {
           map.bank >= 0
             ? String(row[map.bank] ?? "").trim()
             : source.split(" - ")[0] || "ບໍ່ລະບຸ";
+        let store = map.store >= 0 ? String(row[map.store] ?? "").trim() : "";
+        let purpose = map.purpose >= 0 ? String(row[map.purpose] ?? "").trim() : "";
+        let ticket = map.ticket >= 0 ? String(row[map.ticket] ?? "").trim() : "";
         out.in.push({
+          ticket,
           date,
+          from: bank,
+          code: codeVal,
           name: part,
-          code: map.code >= 0 ? String(row[map.code] ?? "").trim() : "",
+          storeName: store || "Lao-Defective",
+          type: classifyPartCode(codeVal, part),
           qty,
+          purpose,
+          remark: source,
           bank: bank || "ບໍ່ລະບຸ",
           source: source || bank || "ບໍ່ລະບຸ",
         });
       } else {
         let work = map.person >= 0 ? String(row[map.person] ?? "").trim() : "";
-        out.fix.push({ date, name: part, qty, who: person(work), work });
+        let fromStore = map.fromStore >= 0 ? String(row[map.fromStore] ?? "").trim() : "Lao-Rework";
+        let toStore = map.toStore >= 0 ? String(row[map.toStore] ?? "").trim() : "Lao-Usable";
+        let purpose = map.purpose >= 0 ? String(row[map.purpose] ?? "").trim() : "";
+        let ticket = map.ticket >= 0 ? String(row[map.ticket] ?? "").trim() : "";
+        out.fix.push({
+          date,
+          code: codeVal,
+          name: part,
+          type: classifyPartCode(codeVal, part),
+          sender: person(work),
+          fromStore,
+          toStore,
+          qty,
+          status: "Confirmed",
+          purpose,
+          remark: work,
+          ticket,
+          who: person(work),
+          work,
+        });
       }
     }
   }
@@ -752,6 +849,7 @@ async function readXlsx(file) {
     throw Error("No matching weekly sheets found");
   return out;
 }
+
 async function handleSectionUpload(event, section) {
   let file = event.target.files?.[0];
   if (!file) return;
@@ -835,8 +933,6 @@ async function handleSectionUpload(event, section) {
     refreshWeeks(preferredWeek);
     document.getElementById("insearch").value = "";
     document.getElementById("fixsearch").value = "";
-    document.getElementById("serviceSearch").value = "";
-    refreshLifePartOptions();
     render();
     renderLifecycle();
     renderService();
@@ -853,6 +949,7 @@ async function handleSectionUpload(event, section) {
   }
   event.target.value = "";
 }
+
 function partLookup(query, d) {
   let q = String(query || "")
     .trim()
@@ -861,11 +958,15 @@ function partLookup(query, d) {
     return '<div class="lookup-prompt">ຄົ້ນຫາຊື່ອາໄຫຼ່ ເພື່ອເບິ່ງຈຳນວນ Part In ແລະ Part Fix ຂອງອາໄຫຼ່ນັ້ນ</div>';
   let inRows = d.in.filter((x) =>
       (
-        x.name +
+        (x.name || "") +
         " " +
         (x.code || "") +
         " " +
         (x.bank || "") +
+        " " +
+        (x.from || "") +
+        " " +
+        (x.storeName || "") +
         " " +
         (x.source || "")
       )
@@ -873,7 +974,17 @@ function partLookup(query, d) {
         .includes(q),
     ),
     fixRows = d.fix.filter((x) =>
-      (x.name + " " + (x.who || "") + " " + (x.work || ""))
+      (
+        (x.name || "") +
+        " " +
+        (x.code || "") +
+        " " +
+        (x.who || "") +
+        " " +
+        (x.sender || "") +
+        " " +
+        (x.work || "")
+      )
         .toLowerCase()
         .includes(q),
     );
@@ -898,8 +1009,8 @@ function partLookup(query, d) {
           b = fixRows.filter((x) => x.name === name),
           ain = a.reduce((n, x) => n + (Number(x.qty) || 0), 0),
           bfix = b.reduce((n, x) => n + (Number(x.qty) || 0), 0),
-          banks = [...new Set(a.map((x) => x.bank).filter(Boolean))].join(", "),
-          techs = [...new Set(b.map((x) => x.who).filter(Boolean))].join(", ");
+          banks = [...new Set(a.map((x) => x.bank || x.from).filter(Boolean))].join(", "),
+          techs = [...new Set(b.map((x) => x.who || x.sender).filter(Boolean))].join(", ");
         return (
           '<div class="lookup-row"><b>' +
           esc(name) +
@@ -918,7 +1029,7 @@ function partLookup(query, d) {
     "</div>"
   );
 }
-let editingLifeId = null;
+
 function toISODate(value) {
   let v = String(value || "").trim();
   if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
@@ -938,185 +1049,130 @@ function toISODate(value) {
         String(day).padStart(2, "0")
     : "";
 }
+
 function formatDMY(value) {
-  let iso = toISODate(value);
-  if (!iso) return "—";
-  let [y, m, d] = iso.split("-");
-  return d + "/" + m + "/" + y;
+  return fmtDate(value);
 }
-function refreshLifePartOptions(selected = "") {
-  let sel = document.getElementById("lifePartSelect");
-  if (!sel) return;
-  let names = [
-    ...new Set(
-      [...DATA.in, ...DATA.fix]
-        .map((x) => String(x.name || "").trim())
-        .filter(Boolean),
-    ),
-  ].sort((a, b) => a.localeCompare(b));
-  sel.innerHTML =
-    '<option value="">-- ເລືອກອາໄຫຼ່ --</option>' +
-    names
-      .map((n) => '<option value="' + esc(n) + '">' + esc(n) + "</option>")
-      .join("") +
-    '<option value="__custom">ພິມຊື່ອາໄຫຼ່ເອງ</option>';
-  if (selected && names.includes(selected)) {
-    sel.value = selected;
-    document.getElementById("lifeCustomWrap").hidden = true;
-  } else if (selected) {
-    sel.value = "__custom";
-    document.getElementById("lifeCustomWrap").hidden = false;
-    document.getElementById("lifeCustomPart").value = selected;
-  } else {
-    sel.value = "";
-    document.getElementById("lifeCustomWrap").hidden = true;
-  }
-}
-function selectedLifePart() {
-  let v = document.getElementById("lifePartSelect").value;
-  return v === "__custom"
-    ? document.getElementById("lifeCustomPart").value.trim()
-    : v;
-}
-function resetLifeForm() {
-  editingLifeId = null;
-  document.getElementById("lifeBank").value = "BCEL";
-  document.getElementById("lifeOut").value = "";
-  document.getElementById("lifeIn").value = "";
-  document.getElementById("lifeType").value = "Electronic";
-  document.getElementById("lifeQty").value = 1;
-  for (let id of [
-    "lifeError",
-    "lifeSerial",
-    "lifeLocation",
-    "lifeFixBy",
-    "lifeRemarks",
-    "lifeCustomPart",
-  ])
-    document.getElementById(id).value = "";
-  refreshLifePartOptions();
-  document.getElementById("addLife").textContent = "ເພີ່ມລາຍການ";
-  document.getElementById("cancelLifeEdit").hidden = true;
-}
-function editLifecycle(id) {
-  let rows = JSON.parse(
-      localStorage.getItem("weeklyPartsShortRequests") || "[]",
-    ),
-    x = rows.find((r) => String(r.id) === String(id));
-  if (!x) return;
-  editingLifeId = String(x.id);
-  document.getElementById("lifeBank").value = x.bank || "BCEL";
-  document.getElementById("lifeOut").value = x.dateOut || "";
-  document.getElementById("lifeIn").value = x.dateIn || "";
-  refreshLifePartOptions(x.part || "");
-  document.getElementById("lifeType").value = x.type || "Electronic";
-  document.getElementById("lifeQty").value = x.qty || 1;
-  for (let [id, key] of [
-    ["lifeError", "error"],
-    ["lifeSerial", "serial"],
-    ["lifeLocation", "location"],
-    ["lifeFixBy", "fixBy"],
-    ["lifeRemarks", "remarks"],
-  ])
-    document.getElementById(id).value = x[key] || "";
-  document.getElementById("addLife").textContent = "ບັນທຶກການແກ້ໄຂ";
-  document.getElementById("cancelLifeEdit").hidden = false;
-  document.getElementById("lifeMessage").textContent =
-    "ແກ້ໄຂລາຍການ: " + (x.part || "");
-}
+
+// Rework Service - Render table layout matching ReworkService.png
 function renderService() {
-  let block = REWORK_SERVICE.find((x) => x.week === sel.value),
-    people = block?.people || [],
-    tasks = block?.tasks || [],
-    query = (document.getElementById("serviceSearch")?.value || "")
-      .trim()
-      .toLowerCase(),
-    shown = tasks.filter((x) =>
-      (x.person + " " + x.type + " " + x.remark).toLowerCase().includes(query),
-    );
-  document.getElementById("serviceTitle").textContent =
-    "Rework Service this week";
+  const currentWeek = sel.value;
+  let block = REWORK_SERVICE.find((x) => x.week === currentWeek) || REWORK_SERVICE[0];
+  let tasks = block?.tasks || [];
+  let people = block?.people || [];
+
+  document.getElementById("serviceTitle").textContent = "Rework Service this week";
+
+  // Calculate summary KPIs
   let sums = people.reduce(
     (a, p) => ({
-      onsite: a.onsite + p.onsite,
-      remote: a.remote + p.remote,
-      help: a.help + p.help,
-      delivery: a.delivery + p.delivery,
-      total: a.total + p.total,
+      onsite: a.onsite + (Number(p.onsite) || 0),
+      remote: a.remote + (Number(p.remote) || 0),
+      help: a.help + (Number(p.help) || 0),
+      delivery: a.delivery + (Number(p.delivery) || 0),
+      total: a.total + (Number(p.total) || 0),
     }),
     { onsite: 0, remote: 0, help: 0, delivery: 0, total: 0 },
   );
+
   document.getElementById("serviceKpis").innerHTML =
     kpi("Onsite Service", sums.onsite, "ວຽກ") +
     kpi("Remote Support", sums.remote, "ວຽກ") +
     kpi("Help bank fix", sums.help, "ວຽກ") +
     kpi("Delivery", sums.delivery, "ວຽກ") +
     kpi("Total", sums.total, "ວຽກລວມ");
-  document.getElementById("servicePeople").innerHTML =
-    people
-      .map(
-        (p) =>
-          "<tr><td><b>" +
-          esc(p.name) +
-          "</b></td><td>" +
-          p.onsite +
-          "</td><td>" +
-          p.remote +
-          "</td><td>" +
-          p.help +
-          "</td><td>" +
-          p.delivery +
-          "</td><td><b>" +
-          p.total +
-          "</b></td></tr>",
-      )
-      .join("") ||
-    '<tr><td colspan=\"6\" class=\"empty\">ບໍ່ມີຂໍ້ມູນໃນອາທິດນີ້</td></tr>';
-  document.getElementById("serviceTasks").innerHTML =
-    shown
-      .map(
-        (t) =>
-          "<tr><td>" +
-          esc(t.person) +
-          "</td><td>" +
-          esc(t.type) +
-          "</td><td>" +
-          esc(t.remark) +
-          "</td><td>" +
-          formatDMY(t.date) +
-          "</td></tr>",
-      )
-      .join("") ||
-    '<tr><td colspan=\"4\" class=\"empty\">ບໍ່ມີລາຍລະອຽດ</td></tr>';
+
+  // Filter tasks by week if task has date
+  let weekStart = currentWeek;
+  let weekEnd = "";
+  if (weekStart) {
+    let d = new Date(weekStart + "T00:00:00Z");
+    d.setUTCDate(d.getUTCDate() + 7);
+    weekEnd = d.toISOString().slice(0, 10);
+  }
+
+  let filteredTasks = tasks.filter((t) => {
+    if (!t.date || !weekStart) return true;
+    return t.date >= weekStart && t.date < weekEnd;
+  });
+
+  if (!filteredTasks.length && tasks.length) {
+    filteredTasks = tasks;
+  }
+
+  const tbody = document.getElementById("serviceDetailsTable");
+  if (!tbody) return;
+
+  tbody.innerHTML = filteredTasks
+    .map(
+      (t) => `<tr>
+      <td><b>${esc(t.person || t.reworkName || "")}</b></td>
+      <td>${t.onsite ? esc(t.onsite) : ""}</td>
+      <td>${t.remote ? esc(t.remote) : ""}</td>
+      <td>${t.help ? esc(t.help) : ""}</td>
+      <td>${t.delivery ? esc(t.delivery) : ""}</td>
+      <td><b>${t.total ? esc(t.total) : (t.type ? esc(t.type) : "")}</b></td>
+      <td class="remark-cell">${esc(t.remark || "")}</td>
+      <td>${fmtDate(t.date)}</td>
+    </tr>`,
+    )
+    .join("") || '<tr><td colspan="8" class="empty">ບໍ່ມີຂໍ້ມູນໃນອາທິດນີ້</td></tr>';
 }
+
+// PART SHORT REQUEST - Spare Part
 function renderLifecycle() {
   let body = document.getElementById("lifeRows");
   if (!body) return;
-  let all = JSON.parse(
-      localStorage.getItem("weeklyPartsShortRequests") || "[]",
-    ),
-    week = sel.value,
-    weekEnd = new Date(week + "T00:00:00");
-  weekEnd.setDate(weekEnd.getDate() + 7);
-  let visible = all.filter(
-      (x) =>
-        !x.dateOut ||
-        (x.dateOut >= week && x.dateOut < weekEnd.toISOString().slice(0, 10)),
-    ),
-    q = (document.getElementById("lifeSearch")?.value || "").toLowerCase(),
-    shown = visible.filter((x) =>
-      Object.values(x).join(" ").toLowerCase().includes(q),
-    );
+
+  let all = (typeof DEFAULT_PART_SHORT_REQUESTS !== "undefined" && DEFAULT_PART_SHORT_REQUESTS.length)
+    ? JSON.parse(JSON.stringify(DEFAULT_PART_SHORT_REQUESTS))
+    : JSON.parse(localStorage.getItem("weeklyPartsShortRequests") || "[]");
+
+  // Also merge with any newly saved short requests
+  try {
+    let saved = JSON.parse(localStorage.getItem("weeklyPartsShortRequests") || "[]");
+    if (saved.length) {
+      all = saved;
+    }
+  } catch {}
+
+  let week = sel.value,
+    weekEnd = "";
+  if (week) {
+    let d = new Date(week + "T00:00:00Z");
+    d.setUTCDate(d.getUTCDate() + 7);
+    weekEnd = d.toISOString().slice(0, 10);
+  }
+
+  // Filter display week only
+  let visible = all.filter((x) => {
+    if (!week) return true;
+    let dOut = x.dateOut ? x.dateOut.slice(0, 10) : "";
+    let dIn = x.dateIn ? x.dateIn.slice(0, 10) : "";
+    return (dOut && dOut >= week && dOut < weekEnd) || (dIn && dIn >= week && dIn < weekEnd) || !dOut;
+  });
+
+  // Sort Min to Max by MIC PART ID CODE
+  visible.sort(comparePartCode);
+
+  let q = (document.getElementById("lifeSearch")?.value || "").toLowerCase();
+  let shown = visible.filter((x) =>
+    Object.values(x).join(" ").toLowerCase().includes(q),
+  );
+
   document.getElementById("lifeTitle").textContent =
-    "Part Short Request this week";
-  document.getElementById("lifeCount").textContent = visible.length + " ລາຍການ";
-  let qty = visible.reduce((n, x) => n + (Number(x.qty) || 0), 0),
+    "PART SHORT REQUEST - Spare Part this week";
+  document.getElementById("lifeCount").textContent = shown.length + " ລາຍການ";
+
+  let qty = shown.reduce((n, x) => n + (Number(x.qty) || 0), 0),
     banks = {};
-  visible.forEach((x) => (banks[x.bank] = (banks[x.bank] || 0) + 1));
+  shown.forEach((x) => (banks[x.bank] = (banks[x.bank] || 0) + 1));
+
   document.getElementById("lifeKpis").innerHTML =
-    kpi("ລາຍການ Part Short", visible.length, "ຄຳຮ້ອງຂໍໃນອາທິດ") +
+    kpi("ລາຍການ Part Short", shown.length, "ຄຳຮ້ອງຂໍໃນອາທິດ") +
     kpi("ຈຳນວນອາໄຫຼ່", qty, "ຊິ້ນ") +
     kpi("ທະນາຄານ", Object.keys(banks).length, "ແຫ່ງ");
+
   body.innerHTML =
     shown
       .map((x) => {
@@ -1124,113 +1180,35 @@ function renderLifecycle() {
           ? Math.max(
               0,
               Math.floor(
-                ((x.dateIn ? new Date(x.dateIn + "T00:00:00") : new Date()) -
-                  new Date(x.dateOut + "T00:00:00")) /
+                ((x.dateIn ? new Date(x.dateIn + "T00:00:00Z") : new Date()) -
+                  new Date(x.dateOut + "T00:00:00Z")) /
                   86400000,
               ),
             )
-          : 0;
-        return (
-          "<tr><td>" +
-          esc(x.bank) +
-          "</td><td>" +
-          formatDMY(x.dateOut) +
-          "</td><td>" +
-          formatDMY(x.dateIn) +
-          "</td><td>" +
-          age +
-          " ມື້</td><td><b>" +
-          esc(x.part) +
-          "</b></td><td>" +
-          esc(x.type) +
-          "</td><td>" +
-          esc(x.qty) +
-          "</td><td>" +
-          esc(x.error) +
-          "</td><td>" +
-          esc(x.serial) +
-          "</td><td>" +
-          esc(x.location) +
-          "</td><td>" +
-          esc(x.fixBy) +
-          "</td><td>" +
-          esc(x.remarks) +
-          '</td><td><button class="edit-life" data-id="' +
-          esc(x.id) +
-          '">ແກ້ໄຂ</button> <button class="delete-life" data-id="' +
-          esc(x.id) +
-          '">ລົບ</button></td></tr>'
-        );
+          : (x.age || 0);
+
+        let typeBadge = classifyPartCode(x.code || x.micPartCode, x.part || x.name);
+
+        return `<tr>
+          <td>${esc(x.code || x.micPartCode || "")}</td>
+          <td><b>${esc(x.part || x.name || "")}</b></td>
+          <td><span class="tag-badge ${typeBadge.toLowerCase()}">${esc(typeBadge)}</span></td>
+          <td>${esc(x.bank || "")}</td>
+          <td>${fmtDate(x.dateOut)}</td>
+          <td>${fmtDate(x.dateIn)}</td>
+          <td>${age} ມື້</td>
+          <td>${esc(x.qty || 1)}</td>
+          <td>${esc(x.error || "")}</td>
+          <td>${esc(x.serial || "")}</td>
+          <td>${esc(x.location || "")}</td>
+          <td>${esc(x.fixBy || "")}</td>
+          <td>${esc(x.remarks || "")}</td>
+        </tr>`;
       })
       .join("") ||
     '<tr><td colspan="13" class="empty">ບໍ່ມີຂໍ້ມູນໃນອາທິດນີ້</td></tr>';
-  body
-    .querySelectorAll(".edit-life")
-    .forEach((b) => (b.onclick = () => editLifecycle(b.dataset.id)));
-  body.querySelectorAll(".delete-life").forEach(
-    (b) =>
-      (b.onclick = () => {
-        let current = JSON.parse(
-          localStorage.getItem("weeklyPartsShortRequests") || "[]",
-        ).filter((x) => String(x.id) !== String(b.dataset.id));
-        localStorage.setItem(
-          "weeklyPartsShortRequests",
-          JSON.stringify(current),
-        );
-        if (String(editingLifeId) === String(b.dataset.id)) resetLifeForm();
-        renderLifecycle();
-      }),
-  );
 }
-function addLifecycle() {
-  let dateOut = document.getElementById("lifeOut").value,
-    dateInRaw = document.getElementById("lifeIn").value,
-    dateIn = dateInRaw || "",
-    item = {
-      id:
-        editingLifeId ||
-        String(Date.now()) + Math.random().toString(16).slice(2),
-      bank: document.getElementById("lifeBank").value,
-      dateOut,
-      dateIn,
-      part: selectedLifePart(),
-      type: document.getElementById("lifeType").value,
-      qty: Number(document.getElementById("lifeQty").value) || 1,
-      error: document.getElementById("lifeError").value.trim(),
-      serial: document.getElementById("lifeSerial").value.trim(),
-      location: document.getElementById("lifeLocation").value.trim(),
-      fixBy: document.getElementById("lifeFixBy").value.trim(),
-      remarks: document.getElementById("lifeRemarks").value.trim(),
-    };
-  if (!item.part || !item.dateOut) {
-    document.getElementById("lifeMessage").textContent =
-      "ກະລຸນາເລືອກ Part Name ແລະ Date out";
-    return;
-  }
-  if (dateInRaw && !dateIn) {
-    document.getElementById("lifeMessage").textContent =
-      "ກະລຸນາເລືອກ Date in ໃຫ້ຖືກຕ້ອງ";
-    return;
-  }
-  if (dateIn && dateIn < dateOut) {
-    document.getElementById("lifeMessage").textContent =
-      "Date in ຕ້ອງບໍ່ກ່ອນ Date out";
-    return;
-  }
-  let rows = JSON.parse(
-    localStorage.getItem("weeklyPartsShortRequests") || "[]",
-  );
-  if (editingLifeId) {
-    let ix = rows.findIndex((x) => String(x.id) === String(editingLifeId));
-    if (ix >= 0) rows[ix] = item;
-  } else rows.push(item);
-  localStorage.setItem("weeklyPartsShortRequests", JSON.stringify(rows));
-  document.getElementById("lifeMessage").textContent = editingLifeId
-    ? "ແກ້ໄຂສຳເລັດ"
-    : "ບັນທຶກແລ້ວ";
-  resetLifeForm();
-  renderLifecycle();
-}
+
 function exportReportBackup() {
   let data = {};
   for (let i = 0; i < localStorage.length; i++) {
@@ -1256,6 +1234,7 @@ function exportReportBackup() {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
   document.getElementById("backupStatus").textContent = "ດາວໂຫຼດໄຟລ໌ສຳຮອງແລ້ວ";
 }
+
 function importReportBackup(file) {
   let status = document.getElementById("backupStatus"),
     reader = new FileReader();
@@ -1292,6 +1271,7 @@ function importReportBackup(file) {
   };
   reader.readAsText(file);
 }
+
 function applySummaryColumnColor(header, colorId) {
   let table = document.querySelector("#weeklySummary table");
   if (!table) return;
@@ -1306,10 +1286,12 @@ function applySummaryColumnColor(header, colorId) {
     if (row.children[index]) row.children[index].style.backgroundColor = color;
   });
 }
+
 function applyRwLaoColor() {
   applySummaryColumnColor("RW_LAO", "rwLaoColor");
   applySummaryColumnColor("Part In/Fix this week", "partInFixColor");
 }
+
 function saveSummaryCell(el) {
   let summary = WEEKLY_SUMMARY.find((x) => x.week === sel.value);
   if (!summary) return;
@@ -1324,6 +1306,7 @@ function saveSummaryCell(el) {
     );
   } catch {}
 }
+
 function render() {
   let weeklySummary = document.getElementById("weeklySummary"),
     summaryNav = document.getElementById("summaryNav"),
@@ -1360,9 +1343,11 @@ function render() {
       .join("");
     applyRwLaoColor();
   }
+
   let d = current(),
     items = d.in,
     fix = d.fix;
+
   document.getElementById("inLookup").innerHTML = partLookup(
     document.getElementById("insearch").value,
     d,
@@ -1371,30 +1356,40 @@ function render() {
     document.getElementById("fixsearch").value,
     d,
   );
+
   let hasManualCategoryTotals = manualInTotals && sel.value === "2026-11-02",
     hasManualFixTotals = manualFixTotals && sel.value === "2026-11-02";
+
   let inUnits = items.reduce((s, x) => s + x.qty, 0),
     names = new Set(items.map((x) => x.name)),
     banks = {};
-  items.forEach((x) => (banks[x.bank] = (banks[x.bank] || 0) + x.qty));
-  let typeUnits = {
-    Electronic: { qty: 0, parts: new Set() },
-    "Wear/Tear": { qty: 0, parts: new Set() },
-    ຍັງບໍ່ຈັດປະເພດ: { qty: 0, parts: new Set() },
-  };
   items.forEach((x) => {
-    let t = getClass(x.name) || "ຍັງບໍ່ຈັດປະເພດ";
+    let b = x.from || x.bank || "ບໍ່ລະບຸ";
+    banks[b] = (banks[b] || 0) + x.qty;
+  });
+
+  let typeUnits = {
+    ELECTRONIC: { qty: 0, parts: new Set() },
+    "Wear/Tear": { qty: 0, parts: new Set() },
+    HCS: { qty: 0, parts: new Set() },
+  };
+
+  items.forEach((x) => {
+    let t = getClass(x.code, x.name) || "ELECTRONIC";
+    if (!typeUnits[t]) typeUnits[t] = { qty: 0, parts: new Set() };
     typeUnits[t].qty += x.qty;
     typeUnits[t].parts.add(x.name);
   });
+
   if (hasManualCategoryTotals) {
-    typeUnits.Electronic = { qty: 48, parts: names };
+    typeUnits.ELECTRONIC = { qty: 48, parts: names };
     typeUnits["Wear/Tear"] = { qty: 61, parts: new Set() };
-    typeUnits["ຍັງບໍ່ຈັດປະເພດ"] = { qty: 0, parts: new Set() };
   }
+
   let cardReaderQty = items
     .filter((x) => /card reader/i.test(x.name))
     .reduce((s, x) => s + x.qty, 0);
+
   document.getElementById("inkpis").innerHTML =
     kpi(
       "ຈຳນວນຮັບເຂົ້າ",
@@ -1402,8 +1397,8 @@ function render() {
       hasManualCategoryTotals ? "Electronic + Wear/Tear" : "ຊິ້ນທັງໝົດ",
     ) +
     kpi(
-      "Electronic",
-      hasManualCategoryTotals ? 48 : typeUnits.Electronic.qty,
+      "ELECTRONIC",
+      hasManualCategoryTotals ? 48 : typeUnits.ELECTRONIC.qty,
       "ຊິ້ນ",
     ) +
     kpi(
@@ -1413,58 +1408,128 @@ function render() {
     ) +
     kpi("Card Reader", cardReaderQty, "ຊິ້ນໃນລາຍການ") +
     kpi("ລາຍການເຂົ້າ", items.length, "ແຖວຂໍ້ມູນ");
+
   document.getElementById("banks").innerHTML = barRows(banks);
   document.getElementById("types").innerHTML = typeSummary(
     typeUnits,
     hasManualCategoryTotals ? 109 : null,
   );
+
+  // Render Part In Table:
+  // Ticket, Date Time, From, MIC PART ID CODE, PART NAME, Store Name, Type, Quantity, Purpose, Remark
   let it = document.getElementById("intable"),
     q = document.getElementById("insearch").value.toLowerCase();
-  it.innerHTML =
-    items
-      .filter((x) =>
-        (x.name + (x.code || "") + x.source + x.bank).toLowerCase().includes(q),
+
+  let filteredIn = items
+    .filter((x) =>
+      (
+        (x.name || "") +
+        (x.code || "") +
+        (x.from || "") +
+        (x.bank || "") +
+        (x.storeName || "") +
+        (x.source || "") +
+        (x.purpose || "") +
+        (x.ticket || "")
       )
+        .toLowerCase()
+        .includes(q),
+    );
+
+  it.innerHTML =
+    filteredIn
       .map(
         (x) =>
-          `<tr><td>${fmtDate(x.date)}</td><td><b>${esc(x.name)}</b></td><td>${esc(x.code || "")}</td><td>${clsSelect(x.name)}</td><td>${x.qty}</td><td>${esc(x.source)}</td></tr>`,
+          `<tr>
+            <td>${esc(x.ticket || "")}</td>
+            <td>${fmtDate(x.date)}</td>
+            <td>${esc(x.from || x.bank || "")}</td>
+            <td><b>${esc(x.code || "")}</b></td>
+            <td><b>${esc(x.name)}</b></td>
+            <td>${esc(x.storeName || "Lao-Defective")}</td>
+            <td>${clsSelect(x.code, x.name)}</td>
+            <td><b>${x.qty}</b></td>
+            <td>${esc(x.purpose || "")}</td>
+            <td>${esc(x.remark || x.source || "")}</td>
+          </tr>`,
       )
-      .join("") || '<tr><td colspan="6" class="empty">ບໍ່ພົບລາຍການ</td></tr>';
+      .join("") || '<tr><td colspan="10" class="empty">ບໍ່ພົບລາຍການ</td></tr>';
+
+  // Render Part Fix Table:
+  // Date, MIC PART ID CODE, PART NAME, Type, Sender, From Store, To Store, Quantity, Status, Purpose, Remark, Ticket
   let fUnits = fix.reduce((s, x) => s + x.qty, 0),
     fNames = new Set(fix.map((x) => x.name)),
     tech = {},
     fc = {
-      Electronic: { qty: 0, parts: new Set() },
+      ELECTRONIC: { qty: 0, parts: new Set() },
       "Wear/Tear": { qty: 0, parts: new Set() },
-      ຍັງບໍ່ຈັດປະເພດ: { qty: 0, parts: new Set() },
+      HCS: { qty: 0, parts: new Set() },
     };
+
   fix.forEach((x) => {
-    tech[x.who] = (tech[x.who] || 0) + x.qty;
-    let t = getClass(x.name) || "ຍັງບໍ່ຈັດປະເພດ";
+    let sender = x.sender || x.who || "ບໍ່ລະບຸ";
+    tech[sender] = (tech[sender] || 0) + x.qty;
+    let t = getClass(x.code, x.name) || "ELECTRONIC";
+    if (!fc[t]) fc[t] = { qty: 0, parts: new Set() };
     fc[t].qty += x.qty;
     fc[t].parts.add(x.name);
   });
+
   document.getElementById("fixkpis").innerHTML =
     kpi("ສ້ອມ/ນຳໃຊ້ໄດ້", fUnits, "ຊິ້ນຍ້າຍເຂົ້າ Lao-usable") +
     kpi("ລາຍການສ້ອມ", fix.length, "ແຖວຢືນຢັນ") +
     kpi("ຊື່ອາໄຫຼ່", fNames.size, "ປະເພດບໍ່ຊ້ຳ") +
     kpi("ຜູ້ສ້ອມ", Object.keys(tech).length, "ຄົນ/ຊື່ທີ່ລະບຸ");
+
   document.getElementById("techs").innerHTML = barRows(tech, "teal");
   document.getElementById("fixtypes").innerHTML = fixTypeSummary(
     fc,
     hasManualFixTotals,
   );
+
   let ft = document.getElementById("fixtable"),
     fq = document.getElementById("fixsearch").value.toLowerCase();
+
+  let filteredFix = fix
+    .filter((x) =>
+      (
+        (x.name || "") +
+        (x.code || "") +
+        (x.sender || "") +
+        (x.who || "") +
+        (x.fromStore || "") +
+        (x.toStore || "") +
+        (x.purpose || "") +
+        (x.remark || "") +
+        (x.work || "") +
+        (x.ticket || "")
+      )
+        .toLowerCase()
+        .includes(fq),
+    );
+
   ft.innerHTML =
-    fix
-      .filter((x) => (x.name + x.who + x.work).toLowerCase().includes(fq))
+    filteredFix
       .map(
         (x) =>
-          `<tr><td>${fmtDate(x.date)}</td><td><b>${esc(x.name)}</b></td><td>${clsSelect(x.name)}</td><td>${x.qty}</td><td>${esc(x.who)}</td><td>${esc(x.work)}</td></tr>`,
+          `<tr>
+            <td>${fmtDate(x.date)}</td>
+            <td><b>${esc(x.code || "")}</b></td>
+            <td><b>${esc(x.name)}</b></td>
+            <td>${clsSelect(x.code, x.name)}</td>
+            <td>${esc(x.sender || x.who || "")}</td>
+            <td>${esc(x.fromStore || "Lao-Rework")}</td>
+            <td>${esc(x.toStore || "Lao-Usable")}</td>
+            <td><b>${x.qty}</b></td>
+            <td><span class="status-confirmed">${esc(x.status || "Confirmed")}</span></td>
+            <td>${esc(x.purpose || "")}</td>
+            <td>${esc(x.remark || x.work || "")}</td>
+            <td>${esc(x.ticket || "")}</td>
+          </tr>`,
       )
-      .join("") || '<tr><td colspan="6" class="empty">ບໍ່ພົບລາຍການ</td></tr>';
+      .join("") || '<tr><td colspan="12" class="empty">ບໍ່ພົບລາຍການ</td></tr>';
 }
+
 function switchTab(targetId) {
   if (!targetId) targetId = "in";
   targetId = targetId.replace(/^#/, "");
@@ -1513,12 +1578,16 @@ window.addEventListener("hashchange", () => {
 if (location.hash) {
   switchTab(location.hash);
 }
+
 sel.onchange = () => {
   render();
   renderLifecycle();
+  renderService();
 };
+
 document.getElementById("insearch").oninput = render;
 document.getElementById("fixsearch").oninput = render;
+
 document
   .getElementById("uploadIn")
   .addEventListener("change", (e) => handleSectionUpload(e, "in"));
@@ -1531,46 +1600,42 @@ document
 document
   .getElementById("uploadService")
   .addEventListener("change", (e) => handleSectionUpload(e, "service"));
-document
-  .getElementById("serviceSearch")
-  .addEventListener("input", renderService);
-sel.addEventListener("change", renderService);
+
 for (const [id, key] of [
   ["rwLaoColor", "weeklyReportRwLaoColor"],
   ["partInFixColor", "weeklyReportPartInFixColor"],
-])
-  document.getElementById(id).addEventListener("input", (e) => {
-    try {
-      localStorage.setItem(key, e.target.value);
-    } catch {}
-    applyRwLaoColor();
-  });
+]) {
+  const el = document.getElementById(id);
+  if (el) {
+    el.addEventListener("input", (e) => {
+      try {
+        localStorage.setItem(key, e.target.value);
+      } catch {}
+      applyRwLaoColor();
+    });
+  }
+}
+
 document
   .getElementById("saveBackup")
-  .addEventListener("click", exportReportBackup);
-document.getElementById("restoreBackup").addEventListener("change", (e) => {
+  ?.addEventListener("click", exportReportBackup);
+document.getElementById("restoreBackup")?.addEventListener("change", (e) => {
   if (e.target.files && e.target.files[0])
     importReportBackup(e.target.files[0]);
   e.target.value = "";
 });
-document.getElementById("summaryRows").addEventListener("focusout", (e) => {
+
+document.getElementById("summaryRows")?.addEventListener("focusout", (e) => {
   let cell = e.target.closest(".summary-edit");
   if (cell) saveSummaryCell(cell);
 });
-document.getElementById("addLife").addEventListener("click", addLifecycle);
-document
-  .getElementById("cancelLifeEdit")
-  .addEventListener("click", resetLifeForm);
-document.getElementById("lifePartSelect").addEventListener("change", (e) => {
-  document.getElementById("lifeCustomWrap").hidden =
-    e.target.value !== "__custom";
-});
-refreshLifePartOptions();
-document.getElementById("lifeSearch").addEventListener("input", () => {
+
+document.getElementById("lifeSearch")?.addEventListener("input", () => {
   try {
     renderLifecycle();
   } catch {}
 });
+
 try {
   render();
 } catch (e) {
@@ -1578,11 +1643,13 @@ try {
   if (f) f.textContent = "Report display error: " + (e?.message || e);
   console.error(e);
 }
+
 try {
   renderLifecycle();
 } catch (e) {
   console.error(e);
 }
+
 try {
   renderService();
 } catch (e) {
