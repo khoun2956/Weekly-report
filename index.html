@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="lo">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Rework Weekly Report</title>
+    <link rel="stylesheet" href="css/styles.css" />
+  </head>
+  <body>
+    <main class="wrap">
+      <header class="top">
+        <div>
+          <div class="eyebrow">Rework · Weekly Operations</div>
+          <h1 class="title">Rework Weekly Report</h1>
+          <p class="sub">
+            ອັບໂຫຼດ Excel ປະຈຳອາທິດ ແລະເລືອກອາທິດທີ່ຕ້ອງການເບິ່ງ
+          </p>
+        </div>
+        <div class="controls">
+          <label for="week">ເລືອກອາທິດ</label
+          ><select id="week"></select
+          ><button class="tab" id="saveBackup" type="button">ບັນທຶກສຳຮອງ</button
+          ><label class="uploadbtn" for="restoreBackup">ເປີດໄຟລ໌ສຳຮອງ</label
+          ><input
+            class="uploadinput"
+            id="restoreBackup"
+            type="file"
+            accept=".json,application/json"
+          /><span class="uploadstatus" id="backupStatus"
+            >ຂໍ້ມູນບັນທຶກໃນ browser ນີ້ອັດຕະໂນມັດ</span
+          >
+        </div>
+      </header>
+      <nav class="tabs">
+        <a class="tab active" href="#in">Part In</a
+        ><a class="tab" href="#fix">Part Fix</a
+        ><a class="tab" id="summaryNav" href="#weeklySummary" hidden
+          >Weekly Summary</a
+        ><a class="tab" href="#partLife">Part Short Request · ອາຍຸອາໄຫຼ່</a
+        ><a class="tab" href="#reworkService">Rework Service</a>
+      </nav>
+      <section class="section active" id="in">
+        <div class="section-head">
+          <div>
+            <h2>Part In this week</h2>
+            <p>ລາຍການທີ່ຮັບເຂົ້າ ແຍກຕາມທະນາຄານ ແລະປະເພດອາໄຫຼ່</p>
+          </div>
+          <div class="sectionupload">
+            <label class="uploadbtn" for="uploadIn">ອັບເດດ Part In</label
+            ><input
+              class="uploadinput"
+              id="uploadIn"
+              type="file"
+              accept=".xlsx,.xlsm"
+            /><span class="uploadstatus" id="statusIn"
+              >ເລືອກ Excel Part In</span
+            >
+          </div>
+        </div>
+        <div class="grid" id="inkpis"></div>
+        <div class="layout">
+          <div class="panel">
+            <h3>ຈຳນວນຮັບເຂົ້າຕາມທະນາຄານ · Electronic ຈາກ Excel</h3>
+            <div id="banks"></div>
+          </div>
+          <div class="panel">
+            <h3>ສະຫຼຸບປະເພດອາໄຫຼ່</h3>
+            <div id="types"></div>
+          </div>
+        </div>
+        <div class="panel tablepanel">
+          <div class="tabletop">
+            <h3>ລາຍລະອຽດ Part In</h3>
+            <input
+              class="search"
+              id="insearch"
+              placeholder="ຄົ້ນຫາອາໄຫຼ່/ທະນາຄານ"
+            />
+          </div>
+          <div class="lookup-summary" id="inLookup"></div>
+          <div class="scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>ວັນທີ</th>
+                  <th>ຊື່ອາໄຫຼ່</th>
+                  <th>MIC Part Code</th>
+                  <th>ປະເພດ</th>
+                  <th>ຈຳນວນ</th>
+                  <th>ທະນາຄານ / ສາຂາ</th>
+                </tr>
+              </thead>
+              <tbody id="intable"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+      <section class="section" id="fix">
+        <div class="section-head">
+          <div>
+            <h2>Part Fix this week</h2>
+            <p>ລາຍການທີ່ຍ້າຍຈາກ Lao-Rework ໄປ Lao-usable ແລະສະຖານະ Confirmed</p>
+          </div>
+          <div class="sectionupload">
+            <label class="uploadbtn" for="uploadFix">ອັບເດດ Part Fix</label
+            ><input
+              class="uploadinput"
+              id="uploadFix"
+              type="file"
+              accept=".xlsx,.xlsm"
+            /><span class="uploadstatus" id="statusFix"
+              >ເລືອກ Excel Part Move</span
+            >
+          </div>
+        </div>
+        <div class="grid" id="fixkpis"></div>
+        <div class="layout">
+          <div class="panel">
+            <h3>ຈຳນວນອາໄຫຼ່ທີ່ສ້ອມໄດ້ຕາມຜູ້ສ້ອມ</h3>
+            <div id="techs"></div>
+          </div>
+          <div class="panel">
+            <h3>ການແຍກປະເພດ</h3>
+            <div id="fixtypes"></div>
+            <p class="mini">
+              ປະເພດ Wear/Tear ບໍ່ມີລະບຸໃນແຖວທີ່ມາຈາກ Excel. ກຳນົດໃນ Part In
+              ແລະລະບົບຈະນຳໄປໃຊ້ກັບ Part Fix ຊື່ອາໄຫຼ່ດຽວກັນ.
+            </p>
+          </div>
+        </div>
+        <div class="panel tablepanel">
+          <div class="tabletop">
+            <h3>ລາຍລະອຽດ Part Fix</h3>
+            <input
+              class="search"
+              id="fixsearch"
+              placeholder="ຄົ້ນຫາອາໄຫຼ່/ຜູ້ສ້ອມ"
+            />
+          </div>
+          <div class="lookup-summary" id="fixLookup"></div>
+          <div class="scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>ວັນທີ</th>
+                  <th>ຊື່ອາໄຫຼ່</th>
+                  <th>ປະເພດ</th>
+                  <th>ຈຳນວນ</th>
+                  <th>ຜູ້ສ້ອມ</th>
+                  <th>ວຽກໃນ Excel</th>
+                </tr>
+              </thead>
+              <tbody id="fixtable"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+      <section class="section" id="weeklySummary" hidden>
+        <div class="section-head">
+          <div>
+            <h2 id="summaryTitle">Rework weekly summary</h2>
+            <p>
+              1. Tóm Tắt Part In/Out Trong Tuần · ກົດທີ່ຊ່ອງຕົວເລກເພື່ອແກ້ໄຂ;
+              ບັນທຶກອັດຕະໂນມັດ
+            </p>
+          </div>
+          <div class="sectionupload">
+            <label class="uploadbtn" for="uploadSummary"
+              >ອັບເດດ Weekly Summary</label
+            ><input
+              class="uploadinput"
+              id="uploadSummary"
+              type="file"
+              accept=".xlsx,.xlsm"
+            /><span class="uploadstatus" id="statusSummary"
+              >ເລືອກ Excel Rework Lao</span
+            ><label class="colorcontrol" for="rwLaoColor"
+              >RW_LAO
+              <input
+                id="rwLaoColor"
+                type="color"
+                value="#dbeafe"
+                aria-label="Choose RW_LAO column color" /></label
+            ><label class="colorcontrol" for="partInFixColor"
+              >Part In/Fix this week
+              <input
+                id="partInFixColor"
+                type="color"
+                value="#dcfce7"
+                aria-label="Choose Part In/Fix this week column color"
+            /></label>
+          </div>
+        </div>
+        <div class="panel tablepanel">
+          <div class="scroll">
+            <table style="min-width: 980px">
+              <thead id="summaryHead"></thead>
+              <tbody id="summaryRows"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+      <section class="section" id="partLife">
+        <div class="section-head">
+          <div>
+            <h2 id="lifeTitle">Part Short Request this week</h2>
+            <p>
+              ຕາຕະລາງຕິດຕາມ Part Short Request ປະຈຳອາທິດ ແລະອາຍຸການຈັດການລາຍການ
+            </p>
+          </div>
+          <span class="uploadstatus" id="lifeCount">0 ລາຍການ</span>
+        </div>
+        <div class="panel">
+          <h3>ເພີ່ມ Part Short Request</h3>
+          <div class="life-form">
+            <label
+              >Bank<select id="lifeBank">
+                <option>BCEL</option>
+                <option>BFL</option>
+                <option>LVB</option>
+                <option>PBB</option>
+                <option>Sacom Bank</option>
+              </select></label
+            ><label>Date out<input id="lifeOut" type="date" /></label
+            ><label>Date in<input id="lifeIn" type="date" /></label
+            ><label
+              >Part Name<select id="lifePartSelect">
+                <option value="">-- ເລືອກອາໄຫຼ່ --</option>
+              </select></label
+            ><label id="lifeCustomWrap" hidden
+              >ພິມຊື່ອາໄຫຼ່<input
+                id="lifeCustomPart"
+                placeholder="ຊື່ອາໄຫຼ່" /></label
+            ><label
+              >Wear/tear<select id="lifeType">
+                <option>Electronic</option>
+                <option>Wear/tear</option>
+              </select></label
+            ><label
+              >Qty<input id="lifeQty" type="number" min="1" value="1" /></label
+            ><label
+              >Error<input
+                id="lifeError"
+                placeholder="ອາການ / ຂໍ້ຜິດພາດ" /></label
+            ><label
+              >S/N<input id="lifeSerial" placeholder="Serial number" /></label
+            ><label
+              >Location<input
+                id="lifeLocation"
+                placeholder="ສາຂາ / ສະຖານທີ່" /></label
+            ><label>Fix by<input id="lifeFixBy" placeholder="ຜູ້ສ້ອມ" /></label
+            ><label class="life-reason"
+              >Remarks<input id="lifeRemarks" placeholder="ໝາຍເຫດ" /></label
+            ><button class="confirm-upload" id="addLife">ເພີ່ມລາຍການ</button
+            ><button class="cancel-upload" id="cancelLifeEdit" hidden>
+              ຍົກເລີກແກ້ໄຂ</button
+            ><span id="lifeMessage" class="mini"></span>
+          </div>
+        </div>
+        <div class="grid" id="lifeKpis"></div>
+        <div class="panel tablepanel">
+          <div class="tabletop">
+            <h3>ລາຍລະອຽດ Part Short Request</h3>
+            <input
+              class="search"
+              id="lifeSearch"
+              placeholder="ຄົ້ນຫາທະນາຄານ / ອາໄຫຼ່ / S/N"
+            />
+          </div>
+          <div class="scroll">
+            <table style="min-width: 1250px">
+              <thead>
+                <tr>
+                  <th>Bank</th>
+                  <th>Date out</th>
+                  <th>Date in</th>
+                  <th>Age (days)</th>
+                  <th>Part Name</th>
+                  <th>Wear/tear</th>
+                  <th>Qty</th>
+                  <th>Error</th>
+                  <th>S/N</th>
+                  <th>Location</th>
+                  <th>Fix by</th>
+                  <th>Remarks</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="lifeRows"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+      <section class="section" id="reworkService">
+        <div class="section-head">
+          <div>
+            <h2 id="serviceTitle">Rework Service this week</h2>
+            <p>ສະຫຼຸບວຽກບໍລິການຕາມຜູ້ປະຕິບັດງານ ແລະລາຍລະອຽດວຽກ</p>
+          </div>
+          <div class="sectionupload">
+            <label class="uploadbtn" for="uploadService"
+              >ອັບເດດ Rework Service</label
+            ><input
+              class="uploadinput"
+              id="uploadService"
+              type="file"
+              accept=".xlsx,.xlsm"
+            /><span class="uploadstatus" id="statusService"
+              >ຂໍ້ມູນ Rework Service</span
+            >
+          </div>
+        </div>
+        <div class="grid service-kpis" id="serviceKpis"></div>
+        <div class="panel tablepanel">
+          <div class="tabletop"><h3>ຈຳນວນວຽກຕາມຜູ້ປະຕິບັດງານ</h3></div>
+          <div class="scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Rework Name</th>
+                  <th>Onsite Service</th>
+                  <th>Remote Support</th>
+                  <th>Help bank fix</th>
+                  <th>Delivery</th>
+                  <th>Total</th>
+                </tr>
+              </thead>
+              <tbody id="servicePeople"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="panel tablepanel">
+          <div class="tabletop">
+            <h3>ລາຍລະອຽດວຽກ</h3>
+            <input
+              class="search"
+              id="serviceSearch"
+              placeholder="ຄົ້ນຫາຜູ້ປະຕິບັດງານ / ລາຍລະອຽດ"
+            />
+          </div>
+          <div class="scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Rework Name</th>
+                  <th>Service Type</th>
+                  <th>Remark</th>
+                  <th>Date</th>
+                </tr>
+              </thead>
+              <tbody id="serviceTasks"></tbody>
+            </table>
+          </div>
+        </div>
+        <p class="mini">
+          ຂໍ້ມູນອ່ານຈາກຊີດ Rework Service. ການອັບເດດໃໝ່ຈະແທນຂໍ້ມູນ Rework
+          Service ທີ່ບັນທຶກໄວ້.
+        </p>
+      </section>
+      <p class="foot" id="reportFoot">
+        ແຫຼ່ງຂໍ້ມູນ: Part In ແລະ Part Move ໃນ Report rework weekly
+        02.07.11.2026.xlsx
+      </p>
+    </main>
+    <script src="js/data.js"></script>
+    <script src="js/app.js"></script>
+  </body>
+</html>
